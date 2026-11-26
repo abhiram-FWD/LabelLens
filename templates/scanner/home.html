@@ -1,0 +1,55 @@
+﻿{% extends "base.html" %}
+{% block title %}Dashboard | LabelLens{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><span aria-current="page">Dashboard</span></nav>{% endblock %}
+{% block content %}
+<div class="dashboard-heading d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+  <div><p class="eyebrow mb-1"><i class="bi bi-grid-1x2 me-1"></i>Your workspace</p><h1 class="h2 mb-1">Dashboard</h1><p class="text-secondary mb-0">A compact view of your label checks and recent trends.</p></div>
+  <a class="btn btn-primary" href="{% url 'scanner:upload' %}"><i class="bi bi-plus-lg me-1"></i>New scan</a>
+</div>
+
+<div class="row g-2 mb-3">
+  <div class="col-6 col-md-4 col-xl"><article class="card stat-card compact-stat h-100"><div class="card-body"><span class="stat-icon"><i class="bi bi-collection"></i></span><div class="stat-label">Total scans</div><div class="stat-value">{{ total_scans }}</div></div></article></div>
+  {% for item in status_data %}<div class="col-6 col-md-4 col-xl"><article class="card stat-card compact-stat h-100"><div class="card-body"><span class="stat-icon"><i class="bi {% if item.label == 'Compliant' %}bi-check-circle{% elif item.label == 'Partially compliant' %}bi-exclamation-circle{% elif item.label == 'Non-compliant' %}bi-x-circle{% elif item.label == 'Needs review' %}bi-eye{% else %}bi-hourglass-split{% endif %}"></i></span><div class="stat-label">{{ item.label }}</div><div class="stat-value">{{ item.count }}</div></div></article></div>{% endfor %}
+</div>
+
+<div class="row g-2 mb-3 rule-stats">
+  <div class="col-6 col-md"><div class="mini-stat"><span><i class="bi bi-check-circle text-success me-1"></i>Passed</span><strong>{{ rule_result_counts.pass|default:0 }}</strong></div></div>
+  <div class="col-6 col-md"><div class="mini-stat"><span><i class="bi bi-shield-exclamation text-warning me-1"></i>Violations</span><strong>{{ verified_violation_count }}</strong></div></div>
+  <div class="col-6 col-md"><div class="mini-stat"><span><i class="bi bi-eye text-warning me-1"></i>Needs review</span><strong>{{ needs_review_rule_count }}</strong></div></div>
+  <div class="col-6 col-md"><div class="mini-stat"><span><i class="bi bi-dash-circle text-secondary me-1"></i>N/A</span><strong>{{ not_applicable_rule_count }}</strong></div></div>
+  <div class="col-6 col-md"><div class="mini-stat"><span><i class="bi bi-speedometer2 text-primary me-1"></i>Pass rate</span><strong>{{ compliance_display }}</strong></div></div>
+</div>
+
+<section class="card mb-3"><div class="card-body"><div class="chart-heading"><div><h2 class="h6 mb-1">Recent scan history</h2><p class="small text-secondary mb-0">Your latest label assessments</p></div><a class="btn btn-sm btn-outline-primary" href="{% url 'scanner:history' %}">View history</a></div>
+  {% if recent_scans %}<div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Product</th><th>Date</th><th>Score</th><th>Status</th></tr></thead><tbody>
+    {% for scan in recent_scans %}<tr><td><a class="d-flex align-items-center gap-2 text-decoration-none" href="{% url 'scanner:result' scan.pk %}">{% with image=scan.images.first %}{% if image %}<img class="history-thumb" src="{{ image.image.url }}" alt="">{% else %}<span class="history-thumb history-thumb-empty"><i class="bi bi-box"></i></span>{% endif %}{% endwith %}<span>{% if scan.product %}{{ scan.product.name }}{% else %}Unidentified product{% endif %}</span></a></td><td>{{ scan.created_at|date:"M j, Y" }}</td><td>{{ scan.score_display }}</td><td>{{ scan.assessment_verdict_label }}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<div class="chart-empty"><i class="bi bi-clock-history"></i><span>Your scans will appear here.</span></div>{% endif %}
+</div></section>
+
+<div class="row g-3 dashboard-charts">
+  <div class="col-12 col-md-6"><section class="card chart-card compact-chart h-100"><div class="card-body"><div class="chart-heading"><div><h2 class="h6 mb-1">Scan status</h2><p class="small text-secondary mb-0">Classification of your scans</p></div><i class="bi bi-pie-chart"></i></div>{% if total_scans %}<div class="chart-wrap"><canvas id="statusChart" aria-label="Chart of scan statuses"></canvas></div>{% else %}<div class="chart-empty"><i class="bi bi-pie-chart"></i><span>Your scan breakdown will appear here.</span></div>{% endif %}</div></section></div>
+  <div class="col-12 col-md-6"><section class="card chart-card compact-chart h-100"><div class="card-body"><div class="chart-heading"><div><h2 class="h6 mb-1">Rule outcomes</h2><p class="small text-secondary mb-0">Pass, fail, review and not applicable</p></div><i class="bi bi-list-check"></i></div>{% if total_rule_results %}<div class="chart-wrap"><canvas id="ruleResultChart" aria-label="Chart of rule outcomes"></canvas></div>{% else %}<div class="chart-empty"><i class="bi bi-list-check"></i><span>Rule outcomes appear after a scan.</span></div>{% endif %}</div></section></div>
+  <div class="col-12 col-md-6"><section class="card chart-card compact-chart h-100"><div class="card-body"><div class="chart-heading"><div><h2 class="h6 mb-1">Most common violations</h2><p class="small text-secondary mb-0">Verified failed rules across your scans</p></div><i class="bi bi-bar-chart"></i></div>{% if failed_rules %}<div class="chart-wrap"><canvas id="failedRulesChart" aria-label="Chart of most common violations"></canvas></div>{% else %}<div class="chart-empty"><i class="bi bi-emoji-smile"></i><span>No verified violations yet.</span></div>{% endif %}</div></section></div>
+  <div class="col-12 col-md-6"><section class="card chart-card compact-chart h-100"><div class="card-body"><div class="chart-heading"><div><h2 class="h6 mb-1">Scans over time</h2><p class="small text-secondary mb-0">Last 30 days</p></div><i class="bi bi-graph-up"></i></div>{% if total_scans %}<div class="chart-wrap"><canvas id="scansOverTimeChart" aria-label="Chart of scans over time"></canvas></div>{% else %}<div class="chart-empty"><i class="bi bi-graph-up"></i><span>Activity appears after your first scan.</span></div>{% endif %}</div></section></div>
+</div>
+
+{{ status_data|json_script:"status-data" }}{{ rule_result_data|json_script:"rule-result-data" }}{{ failed_rules|json_script:"failed-rules-data" }}{{ chart_days|json_script:"chart-days-data" }}{{ chart_scan_counts|json_script:"chart-scan-counts-data" }}
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script>
+  const statuses = JSON.parse(document.getElementById("status-data").textContent);
+  const ruleStatuses = JSON.parse(document.getElementById("rule-result-data").textContent);
+  const failures = JSON.parse(document.getElementById("failed-rules-data").textContent);
+  const days = JSON.parse(document.getElementById("chart-days-data").textContent);
+  const scanCounts = JSON.parse(document.getElementById("chart-scan-counts-data").textContent);
+  const palette = ["#8896aa", "#16845b", "#e3a526", "#c43d4b", "#d08a13"];
+  const charts = [
+    ["statusChart", {type:"doughnut", data:{labels:statuses.map(x=>x.label),datasets:[{data:statuses.map(x=>x.count),backgroundColor:palette,borderWidth:0,hoverOffset:4}]}, options:{responsive:true,maintainAspectRatio:false,cutout:"72%",plugins:{legend:{position:"bottom",labels:{usePointStyle:true,padding:12,boxWidth:7}}}}}],
+    ["ruleResultChart", {type:"doughnut", data:{labels:ruleStatuses.map(x=>x.label),datasets:[{data:ruleStatuses.map(x=>x.count),backgroundColor:ruleStatuses.map(x=>({pass:"#16845b",fail:"#c43d4b",not_applicable:"#7d8797",needs_review:"#d08a13"}[x.status]||"#8896aa")),borderWidth:0,hoverOffset:4}]}, options:{responsive:true,maintainAspectRatio:false,cutout:"72%",plugins:{legend:{position:"bottom",labels:{usePointStyle:true,padding:10,boxWidth:7}}}}}],
+    ["failedRulesChart", {type:"bar", data:{labels:failures.map(x=>x.rule__name),datasets:[{label:"Checks",data:failures.map(x=>x.total),backgroundColor:"#df6a72",borderRadius:5,maxBarThickness:20}]}, options:{indexAxis:"y",responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{beginAtZero:true,grid:{color:"#edf1f6"},ticks:{precision:0}},y:{grid:{display:false}}}}}],
+    ["scansOverTimeChart", {type:"line", data:{labels:days,datasets:[{label:"Scans",data:scanCounts,borderColor:"#2059c5",backgroundColor:"rgba(32,89,197,.1)",pointRadius:1.5,pointHoverRadius:4,fill:true,tension:.32}]}, options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{maxTicksLimit:7}},y:{beginAtZero:true,grid:{color:"#edf1f6"},ticks:{precision:0}}}}}]
+  ];
+  charts.forEach(([id, config]) => { const node=document.getElementById(id); if(node) new Chart(node,config); });
+</script>
+{% endblock %}

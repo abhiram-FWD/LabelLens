@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}New scan | LabelLens{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="{% url 'scanner:dashboard' %}">Dashboard</a><span aria-hidden="true">/</span><span aria-current="page">New scan</span></nav>{% endblock %}
+{% block content %}
+<div class="page-heading mb-3"><p class="eyebrow mb-1"><i class="bi bi-camera me-1"></i>New label check</p><h1 class="h2 mb-1">Upload product photos</h1><p class="text-secondary mb-0">Choose clear images so we can read the declarations accurately.</p></div>
+<div class="row g-3"><div class="col-lg-8">
+  <div class="card shadow-sm"><div class="card-body p-3 p-md-4">
+    {% if errors %}<div class="alert alert-danger upload-server-errors" role="alert"><ul class="mb-0">{% for item in errors %}<li>{{ item }}</li>{% endfor %}</ul></div>{% elif error %}<div class="alert alert-danger upload-server-errors" role="alert">{{ error }}</div>{% endif %}
+    <div class="alert alert-danger py-2" id="uploadErrors" role="alert" hidden></div>
+    <form id="uploadForm" method="post" enctype="multipart/form-data">{% csrf_token %}
+      <div class="row g-3">
+        <div class="col-md-6"><div class="upload-slot"><label class="slot-label" for="frontImage"><span class="slot-icon"><i class="bi bi-box-seam"></i></span><span><strong>Front</strong><small>Brand and product name</small></span></label><input id="frontImage" class="form-control slot-input" type="file" name="front_image" accept="image/jpeg,image/png,image/webp" data-slot="Front"></div></div>
+        <div class="col-md-6"><div class="upload-slot"><label class="slot-label" for="backImage"><span class="slot-icon"><i class="bi bi-card-text"></i></span><span><strong>Back</strong><small>Declarations and manufacturer</small></span></label><input id="backImage" class="form-control slot-input" type="file" name="back_image" accept="image/jpeg,image/png,image/webp" data-slot="Back"></div></div>
+        <div class="col-12"><div class="upload-slot"><label class="slot-label" for="sideImages"><span class="slot-icon"><i class="bi bi-images"></i></span><span><strong>Side label photos</strong><small>Include additional panels, dates or barcode</small></span></label><input id="sideImages" class="form-control slot-input" type="file" name="side_images" accept="image/jpeg,image/png,image/webp" multiple data-slot="Side"></div></div>
+      </div>
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3 mb-2"><span id="selectedCount" class="upload-note">No images selected yet</span><span class="upload-note">JPEG, PNG or WEBP · 5 MB each · up to 6 photos</span></div>
+      <div id="uploadPreviews" class="upload-previews mb-3" hidden></div>
+      <div id="uploadProgressWrap" class="upload-progress-wrap mb-3" hidden aria-live="polite"><div class="d-flex justify-content-between small mb-1"><span id="uploadProgressLabel">Uploading</span><span id="uploadProgressValue">0%</span></div><ol class="upload-steps" aria-label="Scan progress"><li data-upload-stage="uploading" aria-current="step">Uploading</li><li data-upload-stage="reading">Reading text</li><li data-upload-stage="checking">Checking rules</li><li data-upload-stage="completed">Completed</li></ol><div class="progress" role="progressbar" aria-label="Upload progress" aria-valuemin="0" aria-valuemax="100"><div id="uploadProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" style="width:0%"></div></div><p class="small text-secondary mt-2 mb-0" id="uploadStageNote">Sending your images securely.</p></div>
+      <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mt-3"><p class="upload-note mb-0"><i class="bi bi-shield-check me-1"></i>Photos are private to your account.</p><button type="submit" class="btn btn-primary"><i class="bi bi-stars me-2"></i>Check this label</button></div>
+    </form>
+  </div></div>
+  </div><aside class="col-lg-4"><section class="card tips-card h-100"><div class="card-body"><h2 class="h5"><i class="bi bi-lightbulb text-primary me-2"></i>Photo tips</h2><ul class="photo-tips mb-0"><li>Use bright, even lighting and avoid glare.</li><li>Keep the package flat and the text in focus.</li><li>Fill the frame with the label; hold the camera steady.</li><li>Capture the whole panel, including edges and small print.</li><li>Use side photos for date codes or barcodes on folds.</li></ul><div class="alert alert-primary-subtle small mt-3 mb-0"><i class="bi bi-info-circle me-1"></i>Front and back photos give the best results. Side photos are optional.</div></div></section></aside>
+</div>
+{% endblock %}

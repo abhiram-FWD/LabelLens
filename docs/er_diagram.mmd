@@ -1,0 +1,61 @@
+erDiagram
+    AUTH_USER ||--o{ SCAN : owns
+    PRODUCT o|--o{ SCAN : identifies
+    SCAN ||--o{ SCAN_IMAGE : contains
+    SCAN ||--o{ EXTRACTED_FIELD : extracts
+    SCAN ||--o{ RULE_RESULT : assesses
+    RULE ||--o{ RULE_RESULT : defines
+    SCAN ||--o| REPORT : produces
+
+    AUTH_USER {
+        bigint id PK
+    }
+    PRODUCT {
+        bigint id PK
+        string name
+        string barcode UK
+    }
+    SCAN {
+        bigint id PK
+        bigint user_id FK
+        bigint product_id FK "nullable"
+        string status
+        float score "nullable, 0..100"
+        float ocr_confidence "nullable, 0..100"
+        datetime created_at
+    }
+    SCAN_IMAGE {
+        bigint id PK
+        bigint scan_id FK
+        string image
+        string side
+    }
+    EXTRACTED_FIELD {
+        bigint id PK
+        bigint scan_id FK
+        string field_name
+        text value
+        float confidence "nullable, 0..100"
+    }
+    RULE {
+        bigint id PK
+        string code UK
+        string name
+    }
+    RULE_RESULT {
+        bigint id PK
+        bigint scan_id FK
+        bigint rule_id FK
+        string status
+        text found_value
+    }
+    REPORT {
+        bigint id PK
+        bigint scan_id FK_UK
+        string pdf_file
+        datetime generated_at
+    }
+
+%% on_delete: AUTH_USER -> SCAN CASCADE; SCAN -> SCAN_IMAGE, EXTRACTED_FIELD, RULE_RESULT, REPORT CASCADE.
+%% PRODUCT -> SCAN SET_NULL; RULE -> RULE_RESULT PROTECT. Scan child file records delete their stored files on row deletion.
+%% Unique constraints: (scan_id, field_name), (scan_id, rule_id); REPORT.scan_id is one-to-one.

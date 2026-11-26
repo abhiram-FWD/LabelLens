@@ -1,0 +1,80 @@
+# Common commodity names and useful package-label variants
+biscuits
+gluco biscuits
+cookies
+crackers
+noodles
+instant noodles
+pasta
+rice
+basmati rice
+atta
+flour
+oil
+cooking oil
+olive oil
+soap
+bath soap
+shampoo
+tea
+coffee
+juice
+fruit juice
+water
+mineral water
+chips
+potato chips
+snacks
+namkeen
+milk
+powdered milk
+ghee
+butter
+cheese
+yogurt
+curd
+chocolate
+candy
+toffee
+salt
+sugar
+spices
+turmeric
+turmeric powder
+chilli powder
+lentils
+dal
+beans
+honey
+jam
+sauce
+ketchup
+detergent
+toothpaste
+toothbrush
+face wash
+hand wash
+sanitizer
+moisturizer
+cream
+body lotion
+perfume
+deodorant
+shaving cream
+diapers
+sanitary pads
+paper towels
+tissue paper
+floor cleaner
+dishwash liquid
+breakfast cereal
+corn flakes
+oats
+bread
+cake
+frozen food
+ice cream
+soft drink
+carbonated drink
+energy drink
+pet food

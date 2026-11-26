@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}LabelLens | Clearer product label checks{% endblock %}
+{% block content %}
+<section class="hero-panel mb-5">
+  <span class="hero-kicker"><i class="bi bi-patch-check"></i> Product label review, made clearer</span>
+  <h1>Know what's on your label.</h1>
+  <p>Turn product photos into a clear view of label details, compliance checks, and practical next steps.</p>
+  <div class="hero-actions"><a class="btn btn-light btn-lg" href="{% url 'accounts:register' %}">Create your free account <i class="bi bi-arrow-right ms-2"></i></a><a class="btn btn-outline-light" href="{% url 'accounts:login' %}">Log in</a></div>
+</section>
+<section class="mb-5">
+  <div class="section-heading text-center mx-auto"><h2 class="h3">How it works</h2><p>From package photo to practical insights in three steps.</p></div>
+  <div class="row g-3"><div class="col-md-4"><div class="step-card"><div class="step-number">01</div><h3 class="h5">Upload label photos</h3><p class="text-secondary mb-0">Add clear pictures of the package front and back.</p></div></div><div class="col-md-4"><div class="step-card"><div class="step-number">02</div><h3 class="h5">Read the details</h3><p class="text-secondary mb-0">OCR finds declarations such as quantity, price, and dates.</p></div></div><div class="col-md-4"><div class="step-card"><div class="step-number">03</div><h3 class="h5">Review the checks</h3><p class="text-secondary mb-0">See rule results, suggested fixes, and a PDF report.</p></div></div></div>
+</section>
+<section class="mb-5"><div class="section-heading"><h2 class="h3">Tools for clearer label reviews</h2><p>Recognized label text, readable rule findings, downloadable reports, and private scan history.</p></div><div class="row g-3"><div class="col-sm-6 col-lg-3"><div class="step-card"><span class="feature-icon"><i class="bi bi-upc-scan"></i></span><h3 class="h6">Text and barcode extraction</h3></div></div><div class="col-sm-6 col-lg-3"><div class="step-card"><span class="feature-icon"><i class="bi bi-list-check"></i></span><h3 class="h6">Clear rule results</h3></div></div><div class="col-sm-6 col-lg-3"><div class="step-card"><span class="feature-icon"><i class="bi bi-file-earmark-pdf"></i></span><h3 class="h6">PDF reports</h3></div></div><div class="col-sm-6 col-lg-3"><div class="step-card"><span class="feature-icon"><i class="bi bi-clock-history"></i></span><h3 class="h6">Private scan history</h3></div></div></div></section>
+<section class="cta-panel text-center"><h2 class="h3">Ready to check a label?</h2><p class="text-secondary">Create an account and start with a clear product photo.</p><a class="btn btn-primary" href="{% url 'accounts:register' %}">Get started <i class="bi bi-arrow-right ms-1"></i></a><a class="btn btn-outline-primary ms-2" href="{% url 'accounts:login' %}">Log in</a></section>
+{% endblock %}

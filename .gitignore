@@ -1,0 +1,26 @@
+venv/
+__pycache__/
+*.pyc
+.env
+media/
+staticfiles/
+db.sqlite3
+
+# Virtual environments
+.venv/
+
+# Database files
+*.sqlite3
+
+# Python and test caches
+.pytest_cache/
+.coverage
+
+# Logs
+*.log
+
+# IDE and OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

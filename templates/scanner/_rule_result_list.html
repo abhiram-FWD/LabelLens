@@ -1,0 +1,35 @@
+{% if results %}
+  <div class="rule-list">
+    {% for result in results %}
+      <article class="rule-result-row rule-{{ group }}">
+        <div class="rule-result-heading">
+          <h3 class="h6 mb-0">{{ result.rule.name }}</h3>
+          {% if group == 'pass' %}
+            <span class="status-badge badge-pass"><i class="bi bi-check-circle"></i>PASS</span>
+          {% elif group == 'fail' %}
+            <span class="status-badge badge-fail"><i class="bi bi-x-circle"></i>FAIL</span>
+          {% elif group == 'na' %}
+            <span class="status-badge badge-neutral"><i class="bi bi-dash-circle"></i>N/A</span>
+          {% else %}
+            <span class="status-badge badge-review"><i class="bi bi-eye"></i>NEEDS REVIEW</span>
+          {% endif %}
+        </div>
+        <p class="small text-secondary mb-1">{% if result.message %}{{ result.message }}{% elif group == 'review' %}This declaration could not be verified from the available label text.{% endif %}</p>
+        {% if result.source_type == 'manual' %}<p class="small"><strong>Entered manually</strong>{% if result.original_ocr_value %} · Original OCR: {{ result.original_ocr_value }}{% endif %}{% if result.original_ocr_evidence %}<span class="d-block">Original OCR evidence: {{ result.original_ocr_evidence }}</span>{% endif %}</p>{% endif %}
+        {% if result.found_value %}<p class="small mb-1"><strong>Detected value:</strong> {{ result.found_value }}</p>{% endif %}
+        {% if result.source_image or result.evidence %}
+          <details class="rule-evidence small mb-2">
+            <summary>View evidence</summary>
+            {% if result.source_image %}<a class="d-inline-block mt-2 mb-1" href="{{ result.source_image.image.url }}" target="_blank" rel="noopener">Open {{ result.source_image.get_side_display }} image</a>{% endif %}
+            {% if result.evidence %}<blockquote class="mb-1">{{ result.evidence }}</blockquote>{% endif %}{% if result.source_pass %}<span class="d-block text-secondary">OCR pass: {{ result.source_pass }}</span>{% endif %}{% if result.ocr_confidence != None and result.source_type == 'ocr' %}<span class="text-secondary">OCR confidence: {{ result.ocr_confidence|floatformat:0 }}%</span>{% endif %}
+          </details>
+        {% endif %}
+        {% if result.legal_reference or result.rule.legal_reference %}<p class="small text-secondary mb-1">{{ result.legal_reference|default:result.rule.legal_reference }}</p>{% endif %}
+        {% if result.rule.legal_note %}<p class="small text-secondary mb-1">{{ result.rule.legal_note }}</p>{% endif %}
+        {% if result.status == 'fail' or result.status == 'needs_review' %}
+          {% if result.suggested_fix or result.rule.fix_suggestion %}<div class="suggested-fix"><strong>Suggested fix</strong><div>{{ result.suggested_fix|default:result.rule.fix_suggestion }}</div></div>{% endif %}
+        {% endif %}
+      </article>
+    {% endfor %}
+  </div>
+{% endif %}

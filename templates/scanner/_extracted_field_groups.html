@@ -1,0 +1,63 @@
+{% load field_labels %}
+{% if field_groups %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="recheck_fields">
+    {% for group in field_groups %}
+      <section class="mb-4">
+        <h3 class="h6 mb-3">{{ group.name }}</h3>
+        <div class="row g-3">
+          {% for field in group.fields %}
+            <div class="col-md-6">
+              <label class="form-label" for="field_{{ field.field_name|slugify }}">
+                {{ field.field_name|field_label }}
+                {% if field.is_uncertain %}<span class="verify-tag ms-2"><i class="bi bi-eye me-1"></i>{% if not field.value %}Add / verify{% else %}Verify{% endif %}</span>{% endif %}
+              </label>
+              <input class="form-control {% if field.is_uncertain %}field-uncertain{% endif %}"
+                     id="field_{{ field.field_name|slugify }}" name="field_{{ field.field_name }}" value="{{ field.value }}">
+              <div class="field-confidence">
+                {% if field.source_type == 'manual' %}<strong>Entered manually</strong>{% if field.source_image %}<span class="d-block">Source image: {{ field.source_image.get_side_display }}</span>{% endif %}{% if field.source_pass %}<span class="d-block">Original OCR pass: {{ field.source_pass }}</span>{% endif %}{% if field.original_value %}<span class="d-block">Original OCR: {{ field.original_value }}{% if field.original_confidence != None %} ({{ field.original_confidence|floatformat:0 }}%){% endif %}</span>{% if field.original_evidence %}<span class="d-block">Original OCR evidence: {{ field.original_evidence }}</span>{% endif %}{% endif %}
+                {% else %}
+                <span class="confidence-dot {% if field.is_uncertain %}low{% else %}high{% endif %}"></span>
+                {% if field.confidence != None %}{{ field.confidence|floatformat:0 }}% confidence{% else %}Confidence unavailable{% endif %}
+                {% if field.source_image %}<span class="d-block">Source image: {{ field.source_image.get_side_display }}</span>{% endif %}
+                {% if field.source_pass %}<span class="d-block">OCR pass: {{ field.source_pass }}</span>{% endif %}
+                {% endif %}
+                {% if field.review_reason %}<span class="d-block text-warning-emphasis">Needs checking: {{ field.review_reason }}</span>{% endif %}
+                {% if field.source_type != 'manual' and field.alternatives %}<details class="small"><summary>Other OCR readings</summary><span>{{ field.alternatives|join:", " }}</span></details>{% endif %}
+              </div>
+              {% if field.confidence != None %}<div class="mini-confidence-progress"><span class="{% if field.is_uncertain %}low{% endif %}" style="width:{{ field.confidence }}%"></span></div>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      </section>
+    {% endfor %}
+    {% if has_review_items %}
+      <div class="row g-3">
+        {% for field in missing_manual_fields %}
+          <div class="col-md-6">
+            <label class="form-label" for="field_{{ field.name }}">{{ field.label }} <span class="verify-tag ms-1">Add / verify</span></label>
+            <input class="form-control field-uncertain" id="field_{{ field.name }}" name="field_{{ field.name }}">
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <button class="btn btn-primary mt-3"><i class="bi bi-arrow-repeat me-1"></i>Re-check compliance</button>
+  </form>
+{% elif has_review_items %}
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="manual_verify">
+    <div class="row g-3">
+      {% for field in manual_form_fields %}
+        <div class="col-md-6">
+          <label class="form-label" for="manual_{{ field.name }}">{{ field.label }} <span class="verify-tag ms-1">Verify</span></label>
+          <input class="form-control field-uncertain" id="manual_{{ field.name }}" name="{{ field.name }}" value="{{ field.value }}">
+        </div>
+      {% endfor %}
+    </div>
+    <button class="btn btn-primary mt-3"><i class="bi bi-arrow-repeat me-1"></i>Re-check compliance</button>
+  </form>
+{% else %}
+  <div class="empty-state compact-empty"><i class="bi bi-info-circle"></i><p class="mb-0">No fields were extracted from this label.</p></div>
+{% endif %}
