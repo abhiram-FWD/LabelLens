@@ -3,9 +3,11 @@ from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import Client, TestCase, override_settings
+from django.test import Client, TestCase, TransactionTestCase, override_settings
 from django.urls import reverse
 from unittest.mock import patch
+from PIL import Image as PILImage
+from config.urls import urlpatterns as root_urlpatterns
 
 from scanner.models import ExtractedField, Product, Report, Rule, RuleResult, Scan, ScanImage
 from scanner.services.report import generate_pdf
@@ -504,3 +506,32 @@ class ReportAndOwnershipTests(TestCase):
         self.assertRedirects(response, reverse("scanner:history"))
         self.assertFalse(Scan.objects.filter(pk=self.owned_scan.pk).exists())
         self.assertTrue(Scan.objects.filter(pk=self.other_scan.pk).exists())
+
+
+class ProductionMediaServingTests(TransactionTestCase):
+    def test_uploaded_image_is_served_when_debug_is_false_only_to_authenticated_users(self):
+        media_route = next(pattern for pattern in root_urlpatterns if getattr(pattern, "name", None) == "protected_media")
+        route_media_root = media_route.default_args["document_root"]
+        image_buffer = BytesIO()
+        PILImage.new("RGB", (32, 24), "white").save(image_buffer, format="PNG")
+
+        with override_settings(DEBUG=False, MEDIA_ROOT=route_media_root):
+            owner = get_user_model().objects.create_user(username="production-media-owner", password="owner-pass")
+            scan = Scan.objects.create(user=owner)
+            image = ScanImage.objects.create(
+                scan=scan,
+                image=SimpleUploadedFile("production-media-test.png", image_buffer.getvalue(), content_type="image/png"),
+            )
+            response = None
+            try:
+                url = image.image.url
+                self.assertEqual(self.client.get(url).status_code, 302)
+                self.client.force_login(owner)
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response["Content-Type"], "image/png")
+                self.assertEqual(b"".join(response.streaming_content), image_buffer.getvalue())
+            finally:
+                if response is not None:
+                    response.close()
+                image.image.storage.delete(image.image.name)
