@@ -63,6 +63,15 @@ class ExtractFieldsTests(SimpleTestCase):
         result = extract_fields("Organic Turmeric Powder\nNet Qty 100 g\nMRP Rs 80")
         self.assertEqual(result["generic_name"]["value"], "Organic Turmeric Powder")
 
+    def test_short_fuzzy_fragment_does_not_match_a_commodity(self):
+        result = extract_fields("alt")
+        self.assertNotIn("generic_name", result)
+        self.assertNotEqual(result.get("generic_name", {}).get("value"), "Salt")
+
+    def test_long_product_phrase_is_found_on_back_label_text(self):
+        result = extract_fields("GOOD DAY BUTTER COOKIES")
+        self.assertEqual(result["generic_name"]["value"], "Butter Cookies")
+
     def test_empty_text_returns_no_fields(self):
         self.assertEqual(extract_fields("  \n"), {})
 

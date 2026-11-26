@@ -19,7 +19,9 @@ class SharedAssessmentTests(SimpleTestCase):
         self.assertEqual(assessment["applicable"], 3)
         self.assertEqual(assessment["score_label"], "Provisional: 50% of assessed rules passed")
         self.assertEqual(assessment["display"], "Provisional: 50% of assessed rules passed (2 of 3 assessed)")
-        self.assertEqual(assessment["verdict"], Scan.Status.NON_COMPLIANT)
+        self.assertEqual(assessment["verdict"], Scan.Status.NEEDS_REVIEW)
+        self.assertEqual(assessment["verdict_label"], "Needs review")
+        self.assertEqual(assessment["details_label"], "Violation found, needs review")
 
     def test_all_pass_is_final_compliant(self):
         assessment = assessment_from_results([
@@ -46,3 +48,20 @@ class SharedAssessmentTests(SimpleTestCase):
         self.assertIsNone(assessment["score"])
         self.assertEqual(assessment["verdict"], Scan.Status.NEEDS_REVIEW)
         self.assertEqual(assessment["score_label"], "Not assessed")
+
+    def test_only_verified_failures_count_and_noncompliant_requires_complete_assessment(self):
+        assessment = assessment_from_results([
+            SimpleNamespace(status=RuleResult.Status.PASS),
+            SimpleNamespace(status=RuleResult.Status.FAIL, source_type=RuleResult.SourceType.SYSTEM),
+        ])
+        self.assertEqual(assessment["failed"], 0)
+        self.assertEqual(assessment["needs_review"], 1)
+        self.assertEqual(assessment["verdict"], Scan.Status.NEEDS_REVIEW)
+
+        complete = assessment_from_results([
+            SimpleNamespace(status=RuleResult.Status.PASS),
+            SimpleNamespace(status=RuleResult.Status.FAIL),
+        ])
+        self.assertEqual(complete["verdict"], Scan.Status.NON_COMPLIANT)
+        self.assertEqual(complete["verdict_label"], "Non-compliant")
+        self.assertEqual(complete["details_label"], "Violation found")

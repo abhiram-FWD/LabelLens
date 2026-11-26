@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from django.contrib.auth import get_user_model
@@ -36,6 +37,15 @@ class PresentationTests(TestCase):
         self.assertEqual(field_label("Batch_Number"), "Batch number")
         self.assertEqual(field_label("Mrp_Inclusive_Of_Taxes"), "MRP inclusive of taxes")
         self.assertEqual(field_label("custom_unknown_value"), "Custom Unknown Value")
+
+    def test_templates_use_html_middle_dot_entity_and_utf8_charset(self):
+        template_root = Path(__file__).resolve().parents[2] / "templates"
+        templates = list(template_root.rglob("*.html"))
+        self.assertTrue(templates)
+        for template in templates:
+            self.assertNotIn("·", template.read_text(encoding="utf-8"), str(template))
+        base = (template_root / "base.html").read_text(encoding="utf-8")
+        self.assertIn('<meta charset="utf-8">', base)
 
     def test_raw_ocr_is_separated_filtered_and_keeps_original_text(self):
         original_front = "x\n₹\ng\nMRP\n\nA"

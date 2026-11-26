@@ -15,7 +15,7 @@
           {% endif %}
         </div>
         <p class="small text-secondary mb-1">{% if result.message %}{{ result.message }}{% elif group == 'review' %}This declaration could not be verified from the available label text.{% endif %}</p>
-        {% if result.source_type == 'manual' %}<p class="small"><strong>Entered manually</strong>{% if result.original_ocr_value %} · Original OCR: {{ result.original_ocr_value }}{% endif %}{% if result.original_ocr_evidence %}<span class="d-block">Original OCR evidence: {{ result.original_ocr_evidence }}</span>{% endif %}</p>{% endif %}
+        {% if result.source_type == 'manual' %}<p class="small"><strong>Entered manually</strong>{% if result.original_ocr_value %} &middot; Original OCR: {{ result.original_ocr_value }}{% endif %}{% if result.original_ocr_evidence %}<span class="d-block">Original OCR evidence: {{ result.original_ocr_evidence }}</span>{% endif %}</p>{% endif %}
         {% if result.found_value %}<p class="small mb-1"><strong>Detected value:</strong> {{ result.found_value }}</p>{% endif %}
         {% if result.source_image or result.evidence %}
           <details class="rule-evidence small mb-2">

@@ -241,7 +241,7 @@ class EvaluateRulesTests(TestCase):
         self.assertEqual(date_result.suggested_fix, "Add the manufacture date.")
         self.assertEqual(violation_scan.rule_results.get(rule__code="consumer_care").status, RuleResult.Status.NEEDS_REVIEW)
         self.assertEqual(violation_scan.score, 80)
-        self.assertEqual(violation_scan.status, Scan.Status.NON_COMPLIANT)
+        self.assertEqual(violation_scan.status, Scan.Status.NEEDS_REVIEW)
 
     def test_rule_results_keep_source_image_evidence_and_snapshot_fix_fields(self):
         rule = Rule.objects.get(code="mrp")
@@ -269,6 +269,15 @@ class EvaluateRulesTests(TestCase):
         result = scan.rule_results.get(rule__code="mrp")
         self.assertEqual(result.status, RuleResult.Status.NEEDS_REVIEW)
         self.assertIn("could not be extracted reliably", result.message)
+
+    def test_mrp_amount_without_tax_inclusive_wording_needs_exact_review_message(self):
+        scan = self._evaluate_case({"mrp": "100"}, "MRP Rs 100")
+        result = scan.rule_results.get(rule__code="mrp")
+        self.assertEqual(result.status, RuleResult.Status.NEEDS_REVIEW)
+        self.assertEqual(
+            result.message,
+            "MRP amount found, but the inclusive-of-taxes wording could not be read",
+        )
 
     def test_absent_manufacture_date_is_fail_only_with_readable_back(self):
         scan = self._evaluate_case({}, "Readable package label with product details and ingredients.")
@@ -375,7 +384,7 @@ class EvaluateRulesTests(TestCase):
             RuleResult.Status.NEEDS_REVIEW,
         )
 
-    def test_invalid_date_and_price_with_high_confidence_are_verified_failures(self):
+    def test_invalid_date_fails_but_detected_invalid_price_needs_review(self):
         scan = Scan.objects.create(
             user=self.user, extracted_text="MFG 32/13/2026\nMRP Rs 0 inclusive of all taxes",
             ocr_confidence=95,
@@ -388,4 +397,4 @@ class EvaluateRulesTests(TestCase):
         ExtractedField.objects.create(scan=scan, field_name="mrp", value="0", confidence=90)
         evaluate(scan)
         self.assertEqual(scan.rule_results.get(rule__code="mfg_date").status, RuleResult.Status.FAIL)
-        self.assertEqual(scan.rule_results.get(rule__code="mrp").status, RuleResult.Status.FAIL)
+        self.assertEqual(scan.rule_results.get(rule__code="mrp").status, RuleResult.Status.NEEDS_REVIEW)

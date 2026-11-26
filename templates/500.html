@@ -1,3 +1,3 @@
 {% extends "base.html" %}
-{% block title %}Something went wrong · LabelLens{% endblock %}
+{% block title %}Something went wrong &middot; LabelLens{% endblock %}
 {% block content %}<section class="empty-state error-state"><span class="empty-state-icon"><i class="bi bi-cloud-exclamation"></i></span><p class="hero-kicker text-primary bg-white border">Error 500</p><h1 class="h2">Something went wrong</h1><p class="text-secondary">Your information is safe. Please try again in a moment.</p><a class="btn btn-primary" href="{% url 'scanner:home' %}"><i class="bi bi-arrow-clockwise me-1"></i>Try again</a></section>{% endblock %}

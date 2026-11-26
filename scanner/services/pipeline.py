@@ -70,6 +70,22 @@ def _merge_fields(candidates):
                 ),
             })
 
+    back_party_names = [
+        item["value"] for party in ("manufacturer", "marketer")
+        for item in grouped.get(party, []) if item.get("source_side") == "back"
+    ]
+    first_word = lambda value: next(iter(re.findall(r"[A-Za-z][A-Za-z'-]*", value or "")), "")
+    for item in grouped.get("brand", []):
+        if item.get("source_side") != "front":
+            continue
+        brand_word = first_word(item["value"])
+        if brand_word and any(
+            fuzz.ratio(brand_word.casefold(), first_word(name).casefold()) >= 80
+            for name in back_party_names if first_word(name)
+        ):
+            item["brand_corroborated"] = True
+            item["back_company_corroborated"] = True
+
     merged = {}
     for name, values in grouped.items():
         by_value = defaultdict(list)
@@ -94,6 +110,10 @@ def _merge_fields(candidates):
                 # Completeness is a stronger signal than a small OCR
                 # confidence difference for address candidates.
                 score += (32 if has_pin else 0) + (18 if has_street else 0) + (10 if has_locality else 0)
+            if name == "generic_name":
+                if item.get("source_side") == "back":
+                    score += 12
+                score += min(15, len(item["value"]) * 0.25)
             if name == "brand":
                 if item.get("source_side") == "front" and item.get("region") == "logo":
                     score += 40
@@ -101,6 +121,8 @@ def _merge_fields(candidates):
                     score += 15
                 if item.get("brand_corroborated"):
                     score += 25
+                if item.get("back_company_corroborated"):
+                    score += 15
                 score += min(12, 4 * sum(
                     1 for other in values
                     if _value_key(other["value"]) == _value_key(item["value"])
@@ -115,7 +137,7 @@ def _merge_fields(candidates):
                     elif normalized != candidate and len(candidate) >= 3 and normalized.startswith(candidate):
                         score += min(15, len(normalized) - len(candidate))
             return score
-        chosen = max(values if name == "brand" or name in {"manufacturer", "marketer", "packed_by", "imported_by"} else best_group, key=candidate_score)
+        chosen = max(values if name in {"brand", "generic_name", "manufacturer", "marketer", "packed_by", "imported_by"} else best_group, key=candidate_score)
         all_alternatives = []
         for item in values:
             if _value_key(item["value"]) != _value_key(chosen["value"]):
@@ -150,6 +172,8 @@ def _merge_fields(candidates):
             ]
             if plausible_alternatives:
                 review_reason = "Multiple plausible brand readings were found; verify the brand name."
+        if name == "brand" and float(chosen.get("confidence") or 0) < 50 and not review_reason:
+            review_reason = "Brand confidence is below 50%; verify the brand reading."
         merged[name] = {**chosen, "alternatives": alternatives}
         merged[name]["review_reason"] = review_reason
         if name == "manufacturer" and not re.search(r"(?<!\d)[1-9]\d{2}\s?\d{3}(?!\d)", chosen["value"]):

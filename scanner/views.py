@@ -53,11 +53,12 @@ def dashboard(request):
         status_counts[verdict] = status_counts.get(verdict, 0) + 1
     status_data = [{"label": label, "count": status_counts.get(value, 0)} for value, label in status_choices]
 
-    result_counts = {
-        item["status"]: item["total"]
-        for item in RuleResult.objects.filter(scan__user=request.user)
-        .values("status").annotate(total=Count("id"))
-    }
+    result_counts = {}
+    for item in RuleResult.objects.filter(scan__user=request.user).values("status", "source_type"):
+        status = item["status"]
+        if status == RuleResult.Status.FAIL and item["source_type"] == RuleResult.SourceType.SYSTEM:
+            status = RuleResult.Status.NEEDS_REVIEW
+        result_counts[status] = result_counts.get(status, 0) + 1
     rule_result_data = [
         {"status": value, "label": label, "count": result_counts.get(value, 0)}
         for value, label in RuleResult.Status.choices
@@ -65,19 +66,19 @@ def dashboard(request):
 
     verified_violations = RuleResult.objects.filter(
         scan__user=request.user, status=RuleResult.Status.FAIL,
-    ).select_related("scan", "rule")
+    ).exclude(source_type=RuleResult.SourceType.SYSTEM).select_related("scan", "rule")
     failed_rules = list(
         verified_violations
         .values("rule__name").annotate(total=Count("id")).order_by("-total", "rule__name")[:8]
     )
     dashboard_assessment = assessment_from_results(
-        RuleResult.objects.filter(scan__user=request.user).only("status")
+        RuleResult.objects.filter(scan__user=request.user).only("status", "source_type")
     )
     recent_scans = list(request.user.scans.select_related("product").prefetch_related("images", "rule_results")[:6])
     for recent_scan in recent_scans:
         recent_scan.assessment = assessment_for_scan(recent_scan)
         recent_scan.score_display = recent_scan.assessment["display"]
-        recent_scan.assessment_verdict_label = dict(Scan.Status.choices).get(recent_scan.assessment["verdict"], "Needs review")
+        recent_scan.assessment_verdict_label = recent_scan.assessment["verdict_label"]
     since = timezone.now() - timedelta(days=29)
     daily_scans = list(
         request.user.scans.filter(created_at__gte=since)
@@ -308,8 +309,8 @@ def result(request, scan_id):
     ]
     result_groups = {
         "passed_results": [item for item in rule_results if item.status == RuleResult.Status.PASS],
-        "failed_results": [item for item in rule_results if item.status == RuleResult.Status.FAIL],
-        "needs_review_results": [item for item in rule_results if item.status == RuleResult.Status.NEEDS_REVIEW],
+        "failed_results": [item for item in rule_results if item.status == RuleResult.Status.FAIL and item.source_type != RuleResult.SourceType.SYSTEM],
+        "needs_review_results": [item for item in rule_results if item.status == RuleResult.Status.NEEDS_REVIEW or (item.status == RuleResult.Status.FAIL and item.source_type == RuleResult.SourceType.SYSTEM)],
         "na_results": [item for item in rule_results if item.status == RuleResult.Status.NOT_APPLICABLE],
     }
     filter_params = request.GET.copy()
@@ -317,7 +318,8 @@ def result(request, scan_id):
     return render(request, "scanner/result.html", {
         "scan": scan,
         "assessment": assessment,
-        "assessment_verdict_label": dict(Scan.Status.choices).get(assessment["verdict"], "Needs review"),
+        "assessment_verdict_label": assessment["verdict_label"],
+        "assessment_details_label": assessment["details_label"],
         "assessment_score_display": assessment["display"],
         "manual_form_fields": manual_form_fields,
         "violations": scan.violations(),
@@ -426,7 +428,7 @@ def history(request):
     for listed_scan in scan_list:
         listed_scan.assessment = assessment_for_scan(listed_scan)
         listed_scan.score_display = listed_scan.assessment["display"]
-        listed_scan.assessment_verdict_label = dict(Scan.Status.choices).get(listed_scan.assessment["verdict"], "Needs review")
+        listed_scan.assessment_verdict_label = listed_scan.assessment["verdict_label"]
     if selected_status:
         scan_list = [item for item in scan_list if item.assessment["verdict"] == selected_status]
     if score_min_value is not None:

@@ -40,8 +40,8 @@ _PARTY_HEADERS = (
     ("imported_by", re.compile(r"\bimported\s*by\b\s*[:#-]?", re.I)),
 )
 _COMMODITY_FILE = Path(__file__).resolve().parents[2] / "data" / "commodities.txt"
-_COMMODITY_FUZZ_CUTOFF = 82
-_GENERIC_PREFIX_NOISE = {"original", "classic", "premium", "fresh", "best", "the"}
+_COMMODITY_FUZZ_CUTOFF = 90
+_GENERIC_PREFIX_NOISE = {"original", "classic", "premium", "fresh", "best", "the", "good", "day"}
 _BRAND_NOISE = {
     "original", "classic", "premium", "ingredients", "nutrition", "information",
     "serving", "suggestion", "delicious", "tasty", "new", "product",
@@ -64,15 +64,28 @@ _COMMODITIES = _load_commodities()
 
 
 def _generic_match(lines):
-    """Find a commodity phrase and keep useful descriptor words before it."""
+    """Find the longest reliable commodity phrase and keep useful descriptors."""
     candidates = []
+    line_windows = []
     for line_index, line in enumerate(lines):
         if _HEADER.search(line) or len(line) > 80 or re.search(r"\d", line):
             continue
+        line_windows.append((line, line_index))
+        # Product declarations are often wrapped over adjacent OCR lines.
+        window = line
+        for following in range(line_index + 1, min(len(lines), line_index + 4)):
+            next_line = lines[following]
+            if _HEADER.search(next_line) or len(next_line) > 80 or re.search(r"\d", next_line):
+                break
+            window = f"{window} {next_line}"
+            line_windows.append((window, line_index))
+    for line, line_index in line_windows:
         words = re.findall(r"[A-Za-z][A-Za-z'-]*", line)
         for start in range(len(words)):
             for size in range(1, min(4, len(words) - start) + 1):
                 phrase = " ".join(words[start:start + size])
+                if len(phrase) < 4:
+                    continue
                 match = process.extractOne(
                     phrase.casefold(), _COMMODITIES, scorer=fuzz.ratio,
                     score_cutoff=_COMMODITY_FUZZ_CUTOFF,
@@ -80,13 +93,14 @@ def _generic_match(lines):
                 if not match:
                     continue
                 commodity, score, _ = match
-                prefix = [word for word in words[:start] if word.casefold() not in _GENERIC_PREFIX_NOISE]
+                prefix = [word for word in words[:start]
+                          if word.casefold() not in _GENERIC_PREFIX_NOISE]
                 # Keep at most two descriptor words; avoid pulling a tagline into the name.
-                generic = " ".join(prefix[-2:] + commodity.title().split())
-                candidates.append((score, size, -line_index, generic.strip(), phrase))
+                generic = " ".join([word.title() for word in prefix[-2:]] + commodity.title().split())
+                candidates.append((len(phrase), size, score, -line_index, generic.strip(), phrase))
     if not candidates:
         return None, set()
-    score, _size, _line, generic, phrase = max(candidates)
+    _length, _size, score, _line, generic, phrase = max(candidates)
     matched_words = {word.casefold() for word in re.findall(r"[A-Za-z][A-Za-z'-]*", phrase)}
     return {"value": generic, "confidence": round(min(96, max(65, score)), 2)}, matched_words
 

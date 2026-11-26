@@ -132,13 +132,13 @@ def validate_mrp(fields):
         return missing
     amount = value.replace(",", "")
     if not re.fullmatch(r"(?:0|[1-9]\d{0,6})(?:\.\d{1,2})?", amount) or float(amount) <= 0:
-        return RuleResult.Status.FAIL, value, "The MRP amount is not a valid positive price."
+        return RuleResult.Status.NEEDS_REVIEW, value, "MRP amount was detected, but it could not be read as a valid price."
     source = _value(fields, "_source_text")
     if (
         _value(fields, "mrp_inclusive_of_taxes").casefold() not in {"yes", "true", "1"}
         and not re.search(r"incl(?:usive)?\.?\s*(?:of\s*)?all\s+tax(?:es|s)?", source, re.I)
     ):
-        return RuleResult.Status.FAIL, value, "MRP was detected, but the label text does not say it is inclusive of all taxes."
+        return RuleResult.Status.NEEDS_REVIEW, value, "MRP amount found, but the inclusive-of-taxes wording could not be read"
     return RuleResult.Status.PASS, value, "MRP is stated as inclusive of all taxes."
 
 

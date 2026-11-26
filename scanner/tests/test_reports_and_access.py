@@ -157,6 +157,8 @@ class ReportAndOwnershipTests(TestCase):
                                 output.extend(collect_text([cell]))
                             elif isinstance(cell, (list, tuple)):
                                 output.extend(collect_text(cell))
+                            elif isinstance(cell, str):
+                                output.append(cell)
             return output
 
         paragraph_text = " ".join(collect_text(story))
@@ -223,8 +225,10 @@ class ReportAndOwnershipTests(TestCase):
         )
         pass_rule = Rule.objects.create(code="pdf-display-pass", name="MRP declaration")
         review_rule = Rule.objects.create(code="pdf-display-review", name="Date declaration")
+        fail_rule = Rule.objects.create(code="pdf-display-fail", name="Quantity declaration")
         na_rule = Rule.objects.create(code="pdf-display-na", name="Country declaration")
         RuleResult.objects.create(scan=self.owned_scan, rule=pass_rule, status=RuleResult.Status.PASS)
+        RuleResult.objects.create(scan=self.owned_scan, rule=fail_rule, status=RuleResult.Status.FAIL)
         RuleResult.objects.create(
             scan=self.owned_scan, rule=review_rule, status=RuleResult.Status.NEEDS_REVIEW,
             source_image=images[1], source_type=RuleResult.SourceType.MANUAL, evidence="Entered manually",
@@ -255,6 +259,8 @@ class ReportAndOwnershipTests(TestCase):
                                 output.extend(collect_text([cell]))
                             elif isinstance(cell, (list, tuple)):
                                 output.extend(collect_text(cell))
+                            elif isinstance(cell, str):
+                                output.append(cell)
             return output
 
         text = " ".join(collect_text(captured["story"]))
@@ -268,6 +274,7 @@ class ReportAndOwnershipTests(TestCase):
         self.assertIn("Entered manually", text)
         self.assertIn("could not be verified from the available label text", text)
         self.assertIn("N/A", text)
+        self.assertIn("Violation found, needs review", text)
         self.assertTrue(pdf.startswith(b"%PDF"))
 
     def test_user_cannot_access_another_users_scan_result_report_or_actions(self):
@@ -313,6 +320,7 @@ class ReportAndOwnershipTests(TestCase):
         self.client.force_login(self.owner)
         response = self.client.get(reverse("scanner:dashboard"))
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Violation found, needs review")
         self.assertEqual(response.context["rule_result_counts"], {
             "pass": 1, "fail": 1, "needs_review": 2,
         })
@@ -327,7 +335,7 @@ class ReportAndOwnershipTests(TestCase):
             item["count"] for item in response.context["status_data"]
             if item["label"] == "Needs review"
         )
-        self.assertEqual(review_count, 1)
+        self.assertEqual(review_count, 2)
 
     def test_result_page_groups_fields_and_hides_empty_rule_sections(self):
         image = ScanImage.objects.create(scan=self.owned_scan, side=ScanImage.Side.BACK, image="evidence.png")
@@ -368,7 +376,9 @@ class ReportAndOwnershipTests(TestCase):
         result = self.client.get(reverse("scanner:result", args=[self.owned_scan.pk]))
         self.assertEqual(result.status_code, 200)
         self.assertEqual(list(result.context["violations"]), [violation])
-        self.assertEqual(result.context["assessment"]["verdict"], Scan.Status.NON_COMPLIANT)
+        self.assertEqual(result.context["assessment"]["verdict"], Scan.Status.NEEDS_REVIEW)
+        self.assertEqual(result.context["assessment_verdict_label"], "Needs review")
+        self.assertContains(result, "Violation found, needs review")
         self.assertEqual(result.context["assessment"]["needs_review"], 1)
 
         dashboard = self.client.get(reverse("scanner:dashboard"))

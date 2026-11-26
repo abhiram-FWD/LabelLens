@@ -156,7 +156,7 @@ def generate_pdf(scan):
     confidence = f"{scan.ocr_confidence:.0f}%" if scan.ocr_confidence is not None else "Unavailable"
     score_box = Table([[
         [Paragraph("OVERALL SCORE", styles["ScoreLabel"]), Spacer(1, 1 * mm), Paragraph(score, styles["ScoreValue"])],
-        [Paragraph("VERDICT", styles["ScoreLabel"]), Spacer(1, 1 * mm), Paragraph(dict(Scan.Status.choices).get(assessment["verdict"], "Needs review"), styles["ScoreVerdict"])],
+        [Paragraph("VERDICT", styles["ScoreLabel"]), Spacer(1, 1 * mm), Paragraph(assessment["verdict_label"], styles["ScoreVerdict"])],
     ]], colWidths=[87 * mm, 87 * mm])
     score_box.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, -1), PALE_BLUE),
@@ -180,7 +180,8 @@ def generate_pdf(scan):
         ["Assessed rules", f"{assessment['assessed']} of {assessment['applicable']}"],
         ["Rule counts", f"PASS {assessment['passed']} | FAIL {assessment['failed']} | NEEDS REVIEW {assessment['needs_review']} | N/A {assessment['not_applicable']}"],
         ["Rules needing review", str(assessment["needs_review"])],
-        ["Verdict", dict(Scan.Status.choices).get(assessment["verdict"], "Needs review")],
+        ["Verdict", assessment["verdict_label"]],
+        ["Verdict details", assessment["details_label"]],
     ]
     meta_table = Table(metadata, colWidths=[37 * mm, 135 * mm])
     meta_table.setStyle(_table_style(header=False))

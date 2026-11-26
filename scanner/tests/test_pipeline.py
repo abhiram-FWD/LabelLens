@@ -80,6 +80,28 @@ class ScanPipelineMergeTests(TestCase):
         self.assertFalse(merged["brand"]["review_reason"])
         self.assertIn("SOR", merged["brand"]["alternatives"])
 
+    def test_front_brand_reading_is_corroborated_by_back_party_name_and_low_confidence_needs_verify(self):
+        front = SimpleNamespace(pk=1, side="front")
+        back = SimpleNamespace(pk=2, side="back")
+        merged = _merge_fields([
+            ({"brand": {"value": "BRITANN1A", "confidence": 45, "evidence": "BRITANN1A"}},
+             {"confidence": 45, "source_pass": "logo_crop", "region": "logo"}, front),
+            ({"manufacturer": {"value": "BRITANNIA INDUSTRIES LTD; Plot 1, Main Road 263153", "confidence": 90,
+                                "evidence": "Manufactured by: BRITANNIA INDUSTRIES LTD; Plot 1, Main Road 263153"}},
+             {"confidence": 90, "source_pass": "back_panel", "region": "right_panel"}, back),
+        ])
+        self.assertEqual(merged["brand"]["value"], "BRITANN1A")
+        self.assertIn("verify", merged["brand"]["review_reason"].casefold())
+
+    def test_generic_name_merge_uses_back_label_product_phrase(self):
+        merged = _merge_fields([
+            ({"generic_name": {"value": "Cookie", "confidence": 80, "evidence": "Cookie"}},
+             {"confidence": 80, "source_pass": "front"}, SimpleNamespace(pk=1, side="front")),
+            ({"generic_name": {"value": "Butter Cookies", "confidence": 70, "evidence": "GOOD DAY BUTTER COOKIES"}},
+             {"confidence": 70, "source_pass": "back"}, SimpleNamespace(pk=2, side="back")),
+        ])
+        self.assertEqual(merged["generic_name"]["value"], "Butter Cookies")
+
     def test_distinct_logo_region_brand_readings_remain_uncertain(self):
         front = SimpleNamespace(pk=1, side="front")
         merged = _merge_fields([

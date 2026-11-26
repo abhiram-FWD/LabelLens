@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.db import models
-from django.db.models import Count, Q
+from django.db.models import Q
 
 
 class Product(models.Model):
@@ -23,7 +23,7 @@ class ScanQuerySet(models.QuerySet):
         return RuleResult.objects.filter(
             scan__in=self,
             status=RuleResult.Status.FAIL,
-        ).select_related("scan", "rule")
+        ).exclude(source_type=RuleResult.SourceType.SYSTEM).select_related("scan", "rule")
 
 
 class Scan(models.Model):
@@ -70,12 +70,10 @@ class Scan(models.Model):
     @property
     def scan_summary(self):
         """Return live counts by passed, failed, and needs-review results."""
-        counts = self.rule_results.aggregate(
-            passed=Count("pk", filter=Q(status=RuleResult.Status.PASS)),
-            failed=Count("pk", filter=Q(status=RuleResult.Status.FAIL)),
-            needs_review=Count("pk", filter=Q(status=RuleResult.Status.NEEDS_REVIEW)),
-        )
-        return {key: value or 0 for key, value in counts.items()}
+        from scanner.services.assessment import assessment_for_scan
+
+        assessment = assessment_for_scan(self)
+        return {key: assessment[key] for key in ("passed", "failed", "needs_review")}
 
     def __str__(self):
         product = self.product.name if self.product_id else "Unidentified product"
