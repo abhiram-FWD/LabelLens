@@ -531,7 +531,7 @@ def extract_fields(text, ocr_lines=None):
         fields["mrp"] = _result_field(selected, 88, lines, evidence_indexes)
         fields["mrp_currency"] = _result_field("INR", 80, lines, evidence_indexes)
     unit_price = re.search(
-        r"\bunit\s*sale\s*price\b\s*[:#=-]?\s*(?:Rs\.?|INR|[^\w\s])?\s*"
+        r"\bunit\s*sale\s*price\b\s*[:#=-]?\s*(?:Rs\.?|INR|[^\d\s]{1,8})?\s*"
         r"(\d[\d,]*(?:\.\d{1,2})?)(?:\s*/\s*(kg|g|l|ml))?",
         joined, re.I,
     )

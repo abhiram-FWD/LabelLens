@@ -1,5 +1,6 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from time import sleep
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -9,7 +10,7 @@ from PIL import Image
 from pytesseract.pytesseract import TesseractNotFoundError
 
 from scanner.services.extractor import extract_fields
-from scanner.services.ocr import _read_result, configure_tesseract, run_ocr
+from scanner.services.ocr import _load_image, _read_result, _variants, configure_tesseract, run_ocr
 from scanner.services.pipeline import _merge_fields
 
 
@@ -19,6 +20,43 @@ class OCRFallbackTests(SimpleTestCase):
         self.image_path = Path(self.temp_dir.name) / "label.png"
         Image.new("RGB", (40, 30), "white").save(self.image_path)
         self.addCleanup(self.temp_dir.cleanup)
+
+    def test_source_image_is_resized_to_at_most_1600_pixels(self):
+        large_path = Path(self.temp_dir.name) / "large.png"
+        Image.new("RGB", (2400, 1200), "white").save(large_path)
+        image = _load_image(large_path)
+        self.assertLessEqual(max(image.shape[:2]), 1600)
+        self.assertAlmostEqual(image.shape[1] / image.shape[0], 2.0, places=2)
+
+    @patch.dict("os.environ", {"OCR_FAST_MODE": "true"})
+    @patch("scanner.services.ocr._read_result")
+    def test_fast_mode_uses_three_variants_two_psms_and_skips_focus(self, mock_ocr):
+        mock_ocr.return_value = {"text": "readable", "confidence": 50, "word_count": 1, "lines": []}
+        attempts = run_ocr(self.image_path, focus_right=True, focus_logo=True)
+        self.assertEqual(mock_ocr.call_count, 6)
+        self.assertEqual([call.args[1] for call in mock_ocr.call_args_list], [6, 11] * 3)
+        self.assertEqual({attempt["variant"].split("_")[-1] for attempt in attempts}, {"full"})
+        self.assertEqual({attempt["region"] for attempt in attempts}, {"full"})
+
+    @patch.dict("os.environ", {"OCR_FAST_MODE": "1"})
+    @patch("scanner.services.ocr._read_result", return_value={"text": "good", "confidence": 71, "word_count": 1, "lines": []})
+    def test_fast_mode_stops_after_confidence_exceeds_70(self, mock_ocr):
+        attempts = run_ocr(self.image_path)
+        self.assertEqual(mock_ocr.call_count, 1)
+        self.assertEqual(attempts[0]["confidence"], 71)
+
+    @patch.dict("os.environ", {"OCR_FAST_MODE": "true", "OCR_TIME_BUDGET_SECONDS": "0.5"})
+    @patch("scanner.services.ocr._variants", return_value=[("grayscale", np.zeros((30, 40), dtype=np.uint8)), ("otsu_threshold", np.zeros((30, 40), dtype=np.uint8)), ("clahe", np.zeros((30, 40), dtype=np.uint8))])
+    @patch("scanner.services.ocr._read_result")
+    def test_time_budget_stops_later_attempts_and_keeps_first_result(self, mock_ocr, *_mocks):
+        def slow_result(*_args, **_kwargs):
+            sleep(0.55)
+            return {"text": "best so far", "confidence": 60, "word_count": 3, "lines": []}
+        mock_ocr.side_effect = slow_result
+        attempts = run_ocr(self.image_path)
+        self.assertEqual(mock_ocr.call_count, 1)
+        self.assertEqual(len(attempts), 1)
+        self.assertEqual(attempts[0]["text"], "best so far")
 
     @staticmethod
     def result_data(words, confidences):

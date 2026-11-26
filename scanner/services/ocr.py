@@ -11,6 +11,19 @@ from pytesseract import Output
 
 logger = logging.getLogger(__name__)
 PSM_MODES = (6, 11, 12)
+FAST_PSM_MODES = (6, 11)
+
+
+def _env_flag(name, default=False):
+    value = os.environ.get(name)
+    return default if value is None else value.strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _time_budget():
+    try:
+        return max(0.0, float(os.environ.get("OCR_TIME_BUDGET_SECONDS", "60")))
+    except (TypeError, ValueError):
+        return 60.0
 
 
 def configure_tesseract():
@@ -33,24 +46,28 @@ def _load_image(image_path):
         raise ValueError(f"Could not read image: {image_path}")
     height, width = image.shape[:2]
     logger.info("OCR image %s has dimensions %sx%s", image_path, width, height)
-    if max(height, width) > 3000:
-        scale = 2500 / max(height, width)
+    if max(height, width) > 1600:
+        scale = 1600 / max(height, width)
         image = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
         logger.info("Resized large OCR image to %sx%s", image.shape[1], image.shape[0])
     return image
 
 
-def _variants(image):
+def _variants(image, fast_mode=False):
     """Return named OCR image variants, derived from the same resized source."""
     started = perf_counter()
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     height, width = gray.shape[:2]
-    upscale = cv2.resize(gray, (width * 2, height * 2), interpolation=cv2.INTER_CUBIC)
     clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8)).apply(gray)
+    _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if fast_mode:
+        variants = [("grayscale", gray), ("otsu_threshold", otsu), ("clahe", clahe)]
+        logger.info("OCR preprocessing stage elapsed_seconds=%.3f variants=%s fast_mode=True", perf_counter() - started, len(variants))
+        return variants
+    upscale = cv2.resize(gray, (width * 2, height * 2), interpolation=cv2.INTER_CUBIC)
     adaptive = cv2.adaptiveThreshold(
         gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 11
     )
-    _, otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     blurred = cv2.GaussianBlur(gray, (0, 0), 2)
     sharpened = cv2.addWeighted(gray, 1.7, blurred, -0.7, 0)
     variants = [
@@ -72,11 +89,12 @@ def preprocess(image_path):
     return dict(_variants(image))["adaptive_threshold"]
 
 
-def _read_result(image, psm=6):
+def _read_result(image, psm=6, timeout=None):
     started = perf_counter()
-    data = pytesseract.image_to_data(
-        image, config=f"--psm {psm}", output_type=Output.DICT
-    )
+    options = {"config": f"--psm {psm}", "output_type": Output.DICT}
+    if timeout is not None:
+        options["timeout"] = max(0.01, timeout)
+    data = pytesseract.image_to_data(image, **options)
     lines = {}
     confidences = []
     words = []
@@ -144,27 +162,33 @@ def _source_coordinates(lines, scale, offset_x=0, offset_y=0):
 
 def iter_ocr_attempts(image_path, include_rotations=True, focus_right=False, focus_logo=False):
     """Yield every variant/PSM attempt for the debug command and OCR runner."""
+    started = perf_counter()
+    deadline = started + _time_budget()
+    fast_mode = _env_flag("OCR_FAST_MODE", False)
     pytesseract.pytesseract.tesseract_cmd = os.environ.get("TESSERACT_CMD", "tesseract")
     image = _load_image(image_path)
     variant_started = perf_counter()
-    generated = dict(_variants(image))
+    generated = dict(_variants(image, fast_mode=fast_mode))
     # Keep useful full-label views and avoid repeating every PSM over every
     # preprocessing variant. Back labels also get a focused right-panel crop.
-    selected_names = ("original", "clahe", "adaptive_threshold", "grayscale_2x")
+    selected_names = ("grayscale", "otsu_threshold", "clahe") if fast_mode else ("original", "clahe", "adaptive_threshold", "grayscale_2x")
     variants = [(name, generated[name]) for name in selected_names if name in generated]
     logger.info("OCR variant generation elapsed_seconds=%.3f", perf_counter() - variant_started)
     candidates = []
     source_height, source_width = image.shape[:2]
     for name, variant in variants:
+        if perf_counter() >= deadline:
+            logger.info("OCR time budget reached before next variant; elapsed_seconds=%.3f", perf_counter() - started)
+            return
         scale = variant.shape[1] / source_width
         views = [("full", variant, 0, 0)]
-        if focus_right:
+        if focus_right and not fast_mode:
             height, width = variant.shape[:2]
             crop_left, crop_right = int(width * 0.50), int(width * 0.99)
             crop_top, crop_bottom = int(height * 0.10), int(height * 0.91)
             views.append(("right_panel", variant[crop_top:crop_bottom, crop_left:crop_right],
                           crop_left / scale, crop_top / scale))
-        if focus_logo:
+        if focus_logo and not fast_mode:
             height, width = variant.shape[:2]
             crop_left, crop_right = int(width * 0.08), int(width * 0.58)
             crop_top, crop_bottom = int(height * 0.15), int(height * 0.49)
@@ -176,9 +200,13 @@ def iter_ocr_attempts(image_path, include_rotations=True, focus_right=False, foc
             views = [view for view in views if view[0] == "full"]
         for region, region_image, offset_x, offset_y in views:
           region_started = perf_counter()
-          for psm in PSM_MODES:
+          for psm in (FAST_PSM_MODES if fast_mode else PSM_MODES):
+            remaining = deadline - perf_counter()
+            if remaining <= 0:
+                logger.info("OCR time budget reached; elapsed_seconds=%.3f", perf_counter() - started)
+                return
             try:
-                result = _read_result(region_image, psm)
+                result = _read_result(region_image, psm, timeout=remaining)
             except Exception:
                 logger.exception("OCR failed for %s (variant=%s, region=%s, psm=%s)", image_path, name, region, psm)
                 yield {"variant": f"{name}_{region}", "region": region, "psm": psm, "error": True, "text": "", "confidence": 0.0, "word_count": 0}
@@ -194,12 +222,18 @@ def iter_ocr_attempts(image_path, include_rotations=True, focus_right=False, foc
                        "image": region_image, **result}
             candidates.append((result["confidence"], result["word_count"]))
             yield attempt
+            if fast_mode and result["confidence"] > 70:
+                logger.info("OCR fast mode stopped at confidence=%.2f", result["confidence"])
+                return
           logger.info("OCR region stage region=%s variant=%s elapsed_seconds=%.3f", region, name, perf_counter() - region_started)
 
     best = max(candidates, default=None)
     minimum = float(os.environ.get("OCR_MIN_CONFIDENCE", "40"))
-    if include_rotations and best and best[0] < minimum:
+    if not fast_mode and include_rotations and best and best[0] < minimum:
         for angle in (90, 180, 270):
+            if perf_counter() >= deadline:
+                logger.info("OCR time budget reached before rotation; elapsed_seconds=%.3f", perf_counter() - started)
+                return
             rotated = np.rot90(image, angle // 90).copy()
             rotated_variants = dict(_variants(rotated))
             for name in ("original", "adaptive_threshold"):
@@ -207,8 +241,11 @@ def iter_ocr_attempts(image_path, include_rotations=True, focus_right=False, foc
                     continue
                 variant = rotated_variants[name]
                 for psm in (6,):
+                    remaining = deadline - perf_counter()
+                    if remaining <= 0:
+                        return
                     try:
-                        result = _read_result(variant, psm)
+                        result = _read_result(variant, psm, timeout=remaining)
                     except Exception:
                         logger.exception("OCR failed for %s (rotation=%s variant=%s psm=%s)", image_path, angle, name, psm)
                         yield {"variant": f"rotate_{angle}_{name}", "region": "full", "psm": psm, "error": True, "text": "", "confidence": 0.0, "word_count": 0}
