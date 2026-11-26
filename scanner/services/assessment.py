@@ -20,6 +20,7 @@ def assessment_from_results(results):
     )
     needs_review = sum(item.status == RuleResult.Status.NEEDS_REVIEW for item in results) + unverified_failures
     not_applicable = sum(item.status == RuleResult.Status.NOT_APPLICABLE for item in results)
+    total_rules = len(results)
     assessed = passed + failed
     applicable = assessed + needs_review
     score = round(passed * 100 / assessed, 2) if assessed else None
@@ -39,6 +40,17 @@ def assessment_from_results(results):
         f"{score_label} ({assessed} of {applicable} assessed)"
         if needs_review else score_label
     )
+    review_count = f"{needs_review} rule{'s' if needs_review != 1 else ''} need{'s' if needs_review == 1 else ''} review"
+    na_count = f"{not_applicable} rule{'s' if not_applicable != 1 else ''} not applicable"
+    if assessed:
+        score_explanation = (
+            f"{passed}/{assessed} applicable assessed rules passed ({score:.0f}%); "
+            f"{review_count}; {na_count} and excluded from the score."
+        )
+    else:
+        score_explanation = (
+            f"No applicable rules were fully assessed; {review_count}; {na_count}."
+        )
     verdict_label = dict(Scan.Status.choices).get(verdict, "Needs review")
     if failed and needs_review:
         details_label = "Violation found, needs review"
@@ -51,11 +63,13 @@ def assessment_from_results(results):
         "failed": failed,
         "needs_review": needs_review,
         "not_applicable": not_applicable,
+        "total_rules": total_rules,
         "assessed": assessed,
         "applicable": applicable,
         "score": score,
         "score_label": score_label,
         "display": display,
+        "score_explanation": score_explanation,
         "verdict": verdict,
         "verdict_label": verdict_label,
         "details_label": details_label,

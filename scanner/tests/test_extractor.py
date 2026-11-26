@@ -118,7 +118,8 @@ Barcode: 8901719110102"""
             with self.subTest(field=name):
                 self.assertEqual(fields[name]["value"], value)
         self.assertNotIn("net_quantity_conflict", fields)
-        self.assertIn("Mumbai", fields["manufacturer"]["value"])
+        # Preserve OCR text instead of silently fuzzy-correcting a city name.
+        self.assertIn("Mumbal", fields["manufacturer"]["value"])
         self.assertIn("396 210", fields["manufacturer"]["value"])
         self.assertNotIn("pincode_1", fields)
         self.assertEqual(fields["mrp_currency"]["value"], "INR")
@@ -150,7 +151,7 @@ Email: care@example.com"""
         for date_text, expected in (("Pkd. 10/2024", "10/2024"), ("Mfg. 10/09/2026", "10/09/2026"),
                                     ("Mfd. 10/SEP/2026", "10/SEP/2026"), ("Packed on Sep 2026", "Sep 2026")):
             self.assertEqual(extract_fields(date_text)["mfg_date"]["value"], expected)
-        self.assertIn("Mumbai", fields["manufacturer"]["value"])
+        self.assertIn("Mumbal", fields["manufacturer"]["value"])
         for role in ("marketer", "packed_by", "imported_by"):
             self.assertIn(role, fields)
             self.assertNotEqual(fields.get("manufacturer", {}).get("value"), fields[role]["value"])
@@ -295,6 +296,20 @@ Tower 2, Mumbai 400001""")
         self.assertIn("110001", fields["manufacturer"]["value"])
         self.assertNotIn("Mumbai", fields["manufacturer"]["value"])
         self.assertIn("Acme Retail", fields["marketer"]["value"])
+
+    def test_repeated_party_blocks_are_deduplicated_but_source_noise_is_preserved(self):
+        block = """Marketed by: Acme Retail Ltd.
+Prestige Tower, Bengaluru 560048
+&
+Marketed by: Acme Retail Ltd.
+Prestige Tower, Bengaluru 560048
+ISSQL"""
+        fields = extract_fields(block)
+        self.assertEqual(fields["marketer"]["value"].count("Prestige Tower"), 1)
+        self.assertEqual(fields["marketer"]["evidence"].count("Prestige Tower"), 1)
+        self.assertNotIn("ISSQL", fields["marketer"]["value"])
+        self.assertIn("ISSQL", fields["marketer"]["evidence"])
+        self.assertIn("560048", fields["marketer"]["value"])
 
     def test_two_column_text_with_interleaved_lines_extracts_both_columns(self):
         text = """NET QUANTITY: 500 g

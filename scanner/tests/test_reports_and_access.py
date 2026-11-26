@@ -57,6 +57,11 @@ class ReportAndOwnershipTests(TestCase):
             confidence=92, original_value="09/MAR/2027", original_confidence=92,
             original_evidence="09/MAR/2027\\nUse By",
         )
+        ExtractedField.objects.create(
+            scan=self.owned_scan, field_name="generic_name", value="Butter Cookies",
+            confidence=45, original_value="Butter Cookies", original_confidence=45,
+            original_evidence="GOOD DAY BUTTER COOKIES",
+        )
         rule = Rule.objects.create(code="fresh-pdf-state", name="Date", is_active=True)
         result = RuleResult.objects.create(
             scan=self.owned_scan, rule=rule, status=RuleResult.Status.NEEDS_REVIEW,
@@ -79,6 +84,7 @@ class ReportAndOwnershipTests(TestCase):
         self.assertIn("Verify date association.", rendered)
         self.assertIn("Entered manually", rendered)
         self.assertIn("100%", rendered)
+        self.assertIn("Uncertain", rendered)
         self.assertNotIn("Provisional", rendered)
         self.assertNotIn("No text was extracted", rendered)
 
@@ -106,6 +112,16 @@ class ReportAndOwnershipTests(TestCase):
                 pdf = generate_pdf(scan)
                 self.assertTrue(pdf.startswith(b"%PDF"))
                 self.assertTrue(Report.objects.filter(scan=scan, pdf_file__gt="").exists())
+
+    def test_unverified_system_failure_is_displayed_as_review_in_pdf(self):
+        from scanner.services.report import _rule_status
+
+        rule = Rule.objects.create(code="system-failure-pdf", name="Declaration")
+        result = RuleResult.objects.create(
+            scan=self.owned_scan, rule=rule, status=RuleResult.Status.FAIL,
+            source_type=RuleResult.SourceType.SYSTEM,
+        )
+        self.assertEqual(_rule_status(result)[0], "REVIEW")
 
     def test_pdf_includes_each_image_grouped_fields_evidence_and_short_rule_reference(self):
         from PIL import Image as PILImage
@@ -270,6 +286,11 @@ class ReportAndOwnershipTests(TestCase):
             for item in captured["story"]
         ), 2)
         self.assertIn("MRP inclusive of taxes", text)
+        self.assertIn("Total rules", text)
+        self.assertIn("Applicable rules", text)
+        self.assertIn("Score explanation", text)
+        self.assertIn("applicable assessed rules passed", text)
+        self.assertIn("not applicable and excluded from the score", text)
         self.assertIn("Source image: Back", text)
         self.assertIn("Entered manually", text)
         self.assertIn("could not be verified from the available label text", text)

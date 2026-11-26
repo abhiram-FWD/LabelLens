@@ -22,6 +22,10 @@ class SharedAssessmentTests(SimpleTestCase):
         self.assertEqual(assessment["verdict"], Scan.Status.NEEDS_REVIEW)
         self.assertEqual(assessment["verdict_label"], "Needs review")
         self.assertEqual(assessment["details_label"], "Violation found, needs review")
+        self.assertEqual(
+            assessment["score_explanation"],
+            "1/2 applicable assessed rules passed (50%); 1 rule needs review; 1 rule not applicable and excluded from the score.",
+        )
 
     def test_all_pass_is_final_compliant(self):
         assessment = assessment_from_results([
@@ -31,6 +35,7 @@ class SharedAssessmentTests(SimpleTestCase):
         ])
         self.assertEqual(assessment["score"], 100)
         self.assertEqual(assessment["verdict"], Scan.Status.COMPLIANT)
+        self.assertEqual(assessment["score_explanation"], "2/2 applicable assessed rules passed (100%); 0 rules need review; 1 rule not applicable and excluded from the score.")
 
     def test_provisional_one_hundred_percent_is_explicitly_incomplete(self):
         assessment = assessment_from_results([

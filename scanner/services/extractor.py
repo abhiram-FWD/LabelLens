@@ -20,11 +20,6 @@ _QUANTITY = re.compile(
     r"(?P<amount>\d+(?:[.,]\d{1,3})?)\s*(?P<unit>kg|mg|m[l1]|cl|g|l|units?|pcs?\.?|pieces?|count|ct|1|9)?\b",
     re.I,
 )
-_CITY_NAMES = (
-    "Mumbai", "Pune", "Delhi", "Bengaluru", "Chennai", "Kolkata", "Ahmedabad",
-    "Hyderabad", "Daman", "Nashik", "Nagpur", "Jaipur", "Lucknow", "Surat",
-    "Indore", "Bhopal", "Vadodara", "Thane", "Mysuru", "Coimbatore",
-)
 _HEADER = re.compile(
     r"\b(?:net\s*(?:wt|weight|qty|quantity|content|contents)|mrp|m\.?r\.?p\.?|mfg|mfd|pkd|manufactur|"
     r"packed\s*(?:on|by)|best\s*before|expiry|expires|use\s*by|consumer\s*care|customer\s*care|"
@@ -42,6 +37,7 @@ _PARTY_HEADERS = (
 _COMMODITY_FILE = Path(__file__).resolve().parents[2] / "data" / "commodities.txt"
 _COMMODITY_FUZZ_CUTOFF = 90
 _GENERIC_PREFIX_NOISE = {"original", "classic", "premium", "fresh", "best", "the", "good", "day"}
+_PARTY_ABBREVIATIONS = {"ltd", "llp", "inc", "plc", "pvt", "co", "st", "no", "uk", "us", "usa", "uae", "iie", "pin", "lic", "gst"}
 _BRAND_NOISE = {
     "original", "classic", "premium", "ingredients", "nutrition", "information",
     "serving", "suggestion", "delicious", "tasty", "new", "product",
@@ -145,15 +141,6 @@ def _field(value, confidence, evidence="", review_reason="", alternatives=None):
         "review_reason": review_reason, "alternatives": alternatives or [],
         "evidence_coordinates": [],
     }
-
-
-def _fix_city_names(value):
-    def fix(match):
-        token = match.group(0)
-        found = process.extractOne(token, _CITY_NAMES, scorer=fuzz.ratio, score_cutoff=82)
-        return found[0] if found else token
-
-    return re.sub(r"\b[A-Za-z]{4,}\b", fix, value)
 
 
 def _normalize_quantity(amount, unit):
@@ -384,7 +371,7 @@ def _clean_party_parts(parts):
             continue
         # Keep source OCR intact, but avoid appending short isolated OCR
         # fragments from neighboring graphics to an address candidate.
-        if re.fullmatch(r"[A-Z]{3,8}", value):
+        if re.fullmatch(r"[A-Z]{3,8}", value) and value.casefold() not in _PARTY_ABBREVIATIONS:
             continue
         if re.fullmatch(r"[A-Za-z]{1,2}", value) and value.casefold() not in {"st", "no", "uk", "us"}:
             continue
@@ -404,7 +391,15 @@ def _party_blocks(lines):
     def finish(name, parts, evidence):
         cleaned = _clean_party_parts(parts)
         if cleaned:
-            blocks.setdefault(name, []).append(("; ".join(cleaned), cleaned, evidence))
+            value = "; ".join(cleaned)
+            key = re.sub(r"[^a-z0-9]", "", value.casefold())
+            role_blocks = blocks.setdefault(name, [])
+            duplicate = next((item for item in role_blocks
+                              if re.sub(r"[^a-z0-9]", "", item[0].casefold()) == key), None)
+            if duplicate:
+                duplicate[2].extend(line for line in evidence if line not in duplicate[2])
+            else:
+                role_blocks.append([value, cleaned, list(dict.fromkeys(evidence))])
 
     for line in lines:
         header = next(((name, match) for name, pattern in _PARTY_HEADERS if (match := pattern.search(line))), None)
@@ -440,7 +435,7 @@ def _party_blocks(lines):
         finish(active_name, active_parts, active_evidence)
     return {
         name: {
-            "value": _fix_city_names(_clean("; ".join(value for value, _parts, _evidence in values))),
+            "value": _clean("; ".join(value for value, _parts, _evidence in values)),
             "evidence_lines": list(dict.fromkeys(line for _value, _parts, evidence in values for line in evidence)),
         }
         for name, values in blocks.items()
@@ -484,6 +479,18 @@ def _result_field(value, fallback_confidence, records, indexes=(), review_reason
     return result
 
 
+def _unique_evidence_indexes(lines, evidence_lines):
+    wanted = set(evidence_lines)
+    seen = set()
+    indexes = []
+    for index, line in enumerate(lines):
+        key = " ".join(line.casefold().split())
+        if line in wanted and key not in seen:
+            indexes.append(index)
+            seen.add(key)
+    return indexes
+
+
 def _find_batch(lines):
     header = re.compile(r"\b(?:batch|lot)\b", re.I)
     candidates = []
@@ -525,7 +532,6 @@ def extract_fields(text, ocr_lines=None):
     if not text or not text.strip():
         return {}
     normalized = text.replace("\u00a0", " ").replace("â‚¹", "₹").replace("—", "- ")
-    normalized = _fix_city_names(normalized)
     lines = _line_records(normalized, ocr_lines)
     line_texts = [line["text"] for line in lines]
     joined = "\n".join(line_texts)
@@ -567,13 +573,13 @@ def extract_fields(text, ocr_lines=None):
 
     parties = _party_blocks(line_texts)
     for name, party in parties.items():
-        evidence_indexes = [index for index, line in enumerate(line_texts) if line in party["evidence_lines"]]
+        evidence_indexes = _unique_evidence_indexes(line_texts, party["evidence_lines"])
         fields[name] = _result_field(party["value"], 82, lines, evidence_indexes)
     pins = []
     for role, party in parties.items():
         role_pins = list(dict.fromkeys("".join(match.groups()) for match in _PIN.finditer(party["value"])))
         if role_pins:
-            fields[f"{role}_pin"] = _result_field("; ".join(role_pins), 85, lines, [index for index, line in enumerate(line_texts) if line in party["evidence_lines"]])
+            fields[f"{role}_pin"] = _result_field("; ".join(role_pins), 85, lines, _unique_evidence_indexes(line_texts, party["evidence_lines"]))
             pins.extend(role_pins)
     if pins:
         pin_indexes = [index for index, line in enumerate(line_texts) if _PIN.search(line)]

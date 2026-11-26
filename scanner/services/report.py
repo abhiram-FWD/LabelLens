@@ -77,6 +77,8 @@ def _draw_page_number(canvas, document):
 def _rule_status(result):
     if result.status == RuleResult.Status.PASS:
         return "PASS", GREEN, PASS_BG
+    if result.status == RuleResult.Status.FAIL and result.source_type == RuleResult.SourceType.SYSTEM:
+        return "REVIEW", AMBER, REVIEW_BG
     if result.status == RuleResult.Status.FAIL:
         return "FAIL", RED, FAIL_BG
     if result.status == RuleResult.Status.NOT_APPLICABLE:
@@ -177,13 +179,19 @@ def generate_pdf(scan):
         ["Brand", brand],
         ["OCR confidence", confidence],
         ["Overall score", score],
+        ["Total rules", str(assessment["total_rules"])],
+        ["Applicable rules", f"{assessment['applicable']} of {assessment['total_rules'] - assessment['not_applicable']}"],
         ["Assessed rules", f"{assessment['assessed']} of {assessment['applicable']}"],
         ["Rule counts", f"PASS {assessment['passed']} | FAIL {assessment['failed']} | NEEDS REVIEW {assessment['needs_review']} | N/A {assessment['not_applicable']}"],
+        ["Score explanation", assessment["score_explanation"]],
         ["Rules needing review", str(assessment["needs_review"])],
         ["Verdict", assessment["verdict_label"]],
         ["Verdict details", assessment["details_label"]],
     ]
-    meta_table = Table(metadata, colWidths=[37 * mm, 135 * mm])
+    meta_table = Table([
+        [_paragraph(label, styles["SmallCell"]), _paragraph(value, styles["SmallCell"])]
+        for label, value in metadata
+    ], colWidths=[37 * mm, 135 * mm])
     meta_table.setStyle(_table_style(header=False))
     meta_table.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (0, -1), PALE_BLUE),
@@ -209,7 +217,7 @@ def generate_pdf(scan):
             ]))
 
     story.append(Paragraph("Extracted fields", styles["Section"]))
-    minimum_confidence = getattr(settings, "OCR_MIN_CONFIDENCE", 40)
+    minimum_confidence = max(50, getattr(settings, "OCR_MIN_CONFIDENCE", 40))
     fields = list(ExtractedField.objects.filter(scan_id=scan.pk).select_related("source_image"))
     for group, names in FIELD_GROUPS:
         group_fields = [field for field in fields if field.field_name in names]
